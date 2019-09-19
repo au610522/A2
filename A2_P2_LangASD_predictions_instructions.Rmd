@@ -47,7 +47,18 @@ How did your models from last time perform? In this exercise you have to compare
 
 ```{r, include = FALSE}
 
-pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret)
+pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret, MuMIn)
+pacman::p_load(rlist)
+
+#Training set
+demo_train <- read.csv('demo_train.csv', header = T, sep =',')
+token_train <- read.csv('token_train.csv', header = T, sep =',')
+LU_train <- read.csv('LU_train.csv', header = T, sep = ',')
+
+#Testing set
+demo_test <- read.csv('demo_test.csv', header = T, sep =',')
+token_test <- read.csv('token_test.csv', header = T, sep =',')
+LU_test <- read.csv('LU_test.csv', header = T, sep = ',')
 
 ## Clean up function, included to inspire you
 
@@ -100,23 +111,59 @@ CleanUpData <- function(Demo,LU,Word){
 
 # Load training Data
 
-
 #- recreate the models you chose last time (just write the code again and apply it to Train Data)
 
-
 #- calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
-
-
 
 #- create the test dataset (apply the code from assignment 1 or my function to clean up the 3 test datasets)
 # Test data
 
 #- test the performance of the models on the test data (Tips: google the functions "predict()")
 
-
 #- optional: predictions are never certain, can you identify the uncertainty of the predictions? (e.g. google predictinterval())
 
+fTrain <- CleanUpData(demo_train, LU_train, token_train)
+
+fTest <- CleanUpData(demo_test,LU_test,token_test)
+
+fTrain <- subset(fTrain, !is.na(CHI_MLU))
+
+fTest <- subset(fTest, !is.na(CHI_MLU))
+
+
+m7 <- lmer(data = fTrain, 
+     CHI_MLU ~ 1 + Visit * Diagnosis * MOT_MLU * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
+
+m10 <- lmer(data = fTrain, 
+     CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
+
+## MODEL 7
+predict_m7 <- predict(m7)
+
+#- calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
+rmse(fTrain$CHI_MLU, predict_m7) # RMSE = 0.34
+
+#- test the performance of the models on the test data (Tips: google the functions "predict()")
+predict_m7_test <- predict(m7, fTest, allow.new.levels = TRUE)
+rmse(fTest$CHI_MLU, predict_m7_test) # RMSE = 0.59
+
+
+## MODEL 10
+predict_m10 <- predict(m10)
+
+#- calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
+rmse(fTrain$CHI_MLU, predict_m10) # RMSE = 0.35
+
+#- test the performance of the models on the test data (Tips: google the functions "predict()")
+predict_m10_test <- predict(m10, fTest, allow.new.levels = TRUE)
+rmse(fTest$CHI_MLU, predict_m10_test) # RMSE = 0.58
+
 ```
+
+So, the model prediction performance on the test data for model 7 shows a root mean squared error of 0.59 MLU which is almost twice the size of the error on the train data (0.34).
+Therefore, we might have over fitted the model on the train data and it is not as good at predicting on novel data. On the other hand it can still be argued that it is an acceptal model depending on how conservative you are. 
+
+For model 10 we see that there is almost no difference from the first model (0.35 MLU for the training set and 0.58 MLU for the testing set). This model is on the other hand easier to interpret.
 
 [HERE GOES YOUR ANSWER]
 
@@ -139,7 +186,22 @@ In this exercise you have to use cross-validation to calculate the predictive er
 ```{r}
 #- Create the basic model of ChildMLU as a function of Time and Diagnosis (don't forget the random effects!).
 
+m0 <- lmer(data = fTrain, 
+     CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit|Child.ID))
+
 #- Make a cross-validated version of the model. (Tips: google the function "createFolds";  loop through each fold, train a model on the other folds and test it on the fold)
+list <- (1:352)
+fTrain$ID <- list
+
+folds <- createFolds(fTrain$CHI_MLU, k = 5)
+
+# unlist and create list of ID's from fold[1]
+fold_1_list <- unlist(folds[1])
+fold_1_list <- c()
+for (i in folds[1]) {
+  fold_1_list =+ i
+}
+fold_1 <- subset(fTrain, ID %in% fold_1_list)
 
 #- Report the results and comment on them. 
 
