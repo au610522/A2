@@ -134,6 +134,7 @@ fTest <- subset(fTest, !is.na(CHI_MLU))
 m7 <- lmer(data = fTrain, 
      CHI_MLU ~ 1 + Visit * Diagnosis * MOT_MLU * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
 
+# simplest model 
 m10 <- lmer(data = fTrain, 
      CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
 
@@ -185,30 +186,87 @@ In this exercise you have to use cross-validation to calculate the predictive er
 
 ```{r}
 #- Create the basic model of ChildMLU as a function of Time and Diagnosis (don't forget the random effects!).
-
-m0 <- lmer(data = fTrain, 
-     CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit|Child.ID))
+m0 <- lmer(data = fTrain, CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID))
 
 #- Make a cross-validated version of the model. (Tips: google the function "createFolds";  loop through each fold, train a model on the other folds and test it on the fold)
-list <- (1:352)
-fTrain$ID <- list
 
-folds <- createFolds(fTrain$CHI_MLU, k = 5)
+# create folds
+folds_TD <- createFolds(unique(train$Child.ID[fTrain$Diagnosis == "TD"]), k = 5, list = FALSE) # list = FALSE returns vector instead of list
+folds_ASD <- createFolds(unique(train$Child.ID[fTrain$Diagnosis == "ASD"]), k = 5, list = FALSE) # list = FALSE returns vector instead of list
 
-# unlist and create list of ID's from fold[1]
-fold_1_list <- unlist(folds[1])
-fold_1_list <- c()
-for (i in folds[1]) {
-  fold_1_list =+ i
+
+# loop that assigns fold to each unique ID
+fTrain$fold <- 0
+fold_TD_index <- 1
+fold_ASD_index <- 1
+for (id in unique(fTrain$Child.ID)){
+  if (train$Diagnosis[fTrain$Child.ID == id] == "TD") {
+    train$fold[fTrain$Child.ID == id] <- folds_TD[fold_TD_index]
+    fold_TD_index <- fold_TD_index + 1 }
+  else {
+    fTrain$fold[train$Child.ID == id] <- folds_ASD[fold_ASD_index]
+    fold_ASD_index <- fold_ASD_index + 1 }
 }
-fold_1 <- subset(fTrain, ID %in% fold_1_list)
 
-#- Report the results and comment on them. 
+# print number of participants with specific diagnosis for each fold
+for (z in 1:max(train$fold)) {
+  message(paste("n for fold:", z, "ASD -" , length(unique(fTrain$Child.ID[train$fold == z & fTrain$Diagnosis == "ASD"]))))
+  message(paste("n for fold:", z, "TD  -" , length(unique(fTrain$Child.ID[train$fold == z & fTrain$Diagnosis == "TD"]))))
+}
 
-#- Now try to find the best possible predictive model of ChildMLU, that is, the one that produces the best cross-validated results.
 
-# Bonus Question 1: What is the effect of changing the number of folds? Can you plot RMSE as a function of number of folds?
-# Bonus Question 2: compare the cross-validated predictive error against the actual predictive error on the test data
+performances <- c() # initialize empty vector for registering performances
+# loop for running cross validation
+for (i in 1:max(train$fold)) { 
+  # initialize empty train and testing set dataframes for each iteration
+  train_set <- as.data.frame(train[0,])
+  test_set <- as.data.frame(train[0,])
+  prediction <- c() # init empty prediction vector
+  fold_index <- as.integer(as.character(i)) # convert i to integer
+  
+  # assign test and training set depending on 
+  train_set <- train[fTrain$fold != fold_index,]
+  test_set <- train[fTrain$fold == fold_index,]
+  
+  # model setup
+  m0 <- lmer(data = train_set, CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID))
+  
+  # run prediction
+  prediction <- predict(m0, test_set, allow.new.levels = TRUE) # run prediction
+  fold_rmse <- rmse(test_set$CHI_MLU, prediction) # calculate rmse for each fold
+  message(paste("RMSE for fold", fold_index, fold_rmse)) # print RMSE for each fold to console
+  performances[i] <- fold_rmse # register rmse value to 'performances'vector
+}
+
+# calculate mean RMSE and print it
+performances = mean(performances)
+performances
+
+###### WITH THE CVMS PACKAGE ######
+
+pacman::p_load(cvms, groupdata2, knitr, dplyr, ggplot2)
+
+data <- fold(fTrain, k = 5,
+             cat_col = 'Diagnosis',
+             id_col = 'Child.ID') %>% 
+  arrange(.folds)
+
+
+cross_m0 <- cross_validate(data, "CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID)", 
+               fold_cols =".folds",
+               family = "gaussian", 
+               REML = FALSE)
+
+cross_m0
+
+cross_m1 <- cross_validate(data, "CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID)", 
+               fold_cols =".folds",
+               family = "gaussian", 
+               REML = FALSE)
+
+cross_m1
+
+
 ```
 
 [HERE GOES YOUR ANSWER]
