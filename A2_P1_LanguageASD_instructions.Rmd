@@ -79,6 +79,9 @@ library(pacman)
 
 p_load(tidyverse, lmerTest, ggplot2, MuMINn)
 
+install.packages("MuMIn")
+
+library(MuMINn)
 ```
 
 ### Define your working directory and load the data
@@ -91,7 +94,9 @@ If you opened this Rmd file outside of a project, you will need some code to fin
 - Load the data you saved last time (use read_csv(fileName))
 
 ```{r Load Data, include = FALSE}
+# the directory is already placed in a project, where the data is placed
 
+# Loading the data
 train <- read.csv('train.csv', header = T, sep =',')
 
 ```
@@ -105,8 +110,8 @@ Make sure the variables are in the right format.
 Describe the characteristics of the two groups of participants and whether the two groups are well matched.
 
 ```{r descriptive stats, include = FALSE}
-train$SUBJ <- as.character(train$SUBJ)
 #making subject charectors in stead of a numeric value
+train$SUBJ <- as.character(train$SUBJ)
 
 summary(train)
 
@@ -148,30 +153,35 @@ Remember to plot the data first and then to run a statistical test.
 
 ```{r ex2, include = FALSE}
 
+# A plot of the average development of each group in mean length of utterances (CHI_MLU) over visits - each participant with their own color, line showing the average development, one plot for each group
 ggplot(data = train,
        aes(x = VISIT, y = CHI_MLU, group = Diagnosis, color = SUBJ)) +
   geom_smooth(method = lm) +
   geom_point() + 
   facet_wrap(.~ Diagnosis)
 
+# Shows that there is a more even development in TD than ASD and also that the average MLU is higher for TD, especially at visit 6. The ASD graph has more variance 
+
+# A plot where there is created a line for each participants estimated development. Shows that there is a great deal more variance in the development of ASD children where most of the TD children develop in the same way.
 ggplot(train, aes(x = VISIT, y = CHI_MLU, group = SUBJ, color = SUBJ)) +
   geom_smooth(method = 'lm', se = FALSE) +
   facet_wrap(~Diagnosis) +
   theme_minimal()
 
-#ASD has more variance thant TD kids 
+# Concluding: ASD has more variance thant TD kids 
 
-# Assuming that the intercept does not affect the slop 
+## Creating models - Assuming that the intercept does not affect the slop, meaning that where the childs ability starts will not affect the way in which they develop over time.
 
-m0 <- lmer(data = train, 
+# model with no interactions - the most basic model
+m1 <- lmer(data = train, 
      CHI_MLU ~ VISIT + Diagnosis + (1|SUBJ) + (0 + VISIT|SUBJ))
-# no interactions
 
-m1 <- lmerTest::lmer(data = train, 
-     CHI_MLU ~ VISIT * Diagnosis + (1|SUBJ) + (0 + VISIT|SUBJ))
 # interactions - the slope of visits will change based on diagnosis
+m2 <- lmerTest::lmer(data = train, 
+     CHI_MLU ~ VISIT * Diagnosis + (1|SUBJ) + (0 + VISIT|SUBJ))
 
 
+### Notes taken in class ###
 
 #Using lmer => random effects 
 # => the child ID is important 
@@ -187,26 +197,24 @@ m1 <- lmerTest::lmer(data = train,
 #### Want to add both non verbal iq and socialization => this would create a lot of models
 
 ### Want us to find the best posible model
-
-# Find a strategie for finding the best model 
 ```
 
 How would you evaluate whether the model is a good model?
-
+We want to look for a model that explains a lot of the variance (looking at the R2 margenal) but also has a low AIC value. First we will use anova to see if it explaince more variance and than look at the R2 values
 
 
 ```{r ex2 evaluate, include = FALSE}
-summary(m0)
-
 summary(m1)
 
-qqnorm(residuals(m1))
+summary(m2)
 
-anova(m0, m1)
-#model 1 is better than model 0 
+qqnorm(residuals(m2))
 
-r.squaredGLMM(m1)
-# When looking at the marginal R2 the model only predicts around 35% of the variance but when including the random effects in the conditional R2 we see that almost 82% of the variance is explained. This means that the random effects explain a great deal of the variance, and this will not be good for a generalized model where we want to be able to explain the change for each group and not the subject itself.
+anova(m1, m2)
+#model 2 is better than model 1 since it has a lower AIC and also explainse significantly more of the variance 
+
+r.squaredGLMM(m2)
+# When looking at the marginal R2 the model only predicts around 35% of the variance but when including the random effects in the conditional R2 we see that almost 82% of the variance is explained. This means that the random effects explain a great deal of the variance, and this will not be good if we want to make a generalized model.
 ```
 
 Not too good, right? Let's check whether a growth curve model is better.
@@ -215,15 +223,18 @@ First build the different models, then compare them to see which one is better.
 
 ```{r ex2 growth curve, include = FALSE}
 
-# Chosen to skip this exercis 
+# Chosen to skip this exercis since we have not covered growth curve
 
 ```
 
 Exciting right? Let's check whether the model is doing an alright job at fitting the data. Plot the actual CHI_MLU data against the predictions of the model fitted(model). 
 
 ```{r}
+# saving train in a new data frame befor changing it
 df <- train
-df$fit <- predict(m1)
+
+#adding the predicted values to each trail based on model 2
+df$fit <- predict(m2)
 
 # # predicted versus actual, points are actual datapoints, lines are predictions
 ggplot(df, aes(x = VISIT, y = CHI_MLU, group = SUBJ, color = Diagnosis)) +
@@ -235,6 +246,9 @@ ggplot(df, aes(x = VISIT, y = CHI_MLU, group = SUBJ, color = Diagnosis)) +
        x = "Visit",
        y = "Mean length of utterance",
        color = "Diagnosis")
+
+
+
 ```
 
 Now it's time to report our results.
@@ -251,43 +265,52 @@ Linguistic development of children MLU is affected by ... [COMPLETE]
 ### Hypothesis: Parental MLU changes: i) over time, ii) according to diagnosis
 
 ```{r ex3, include = FALSE}
+# A plot over the average difference in parents MLU depending on diagnosis 
 ggplot(data = train,
        aes(x = VISIT, y = MOT_MLU, group = Diagnosis, color = SUBJ)) +
   geom_smooth(method = lm) +
   geom_point() + 
   facet_wrap(.~ Diagnosis)
-#ASD has more variance thant TD kids 
+# Shows that TD parents on average talks more but it shows they have almost the same slope, meaning they develop in the same way 
+
+# Shows an estimated line for each parent
+ggplot(train, aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = SUBJ)) +
+  geom_smooth(method = 'lm', se = FALSE) +
+  facet_wrap(~Diagnosis) +
+  theme_minimal()
+# Shows that there is fare more variance in the parents speach than the childrens. The variance can also be seen in the TD parents 
 
 # Assuming that the intercept does not affect the slop 
 
-m0 <-lmer(data = train, 
+m3 <-lmer(data = train, 
      MOT_MLU ~ Diagnosis + (1|SUBJ) + (0 + VISIT|SUBJ))
 
-m1 <- lmer(data = train, 
+m4 <- lmer(data = train, 
      MOT_MLU ~ VISIT + (1|SUBJ) + (0 + VISIT|SUBJ))
 
-m2 <- lmer(data = train, 
+m5 <- lmer(data = train, 
      MOT_MLU ~ VISIT + Diagnosis + (1|SUBJ) + (0 + VISIT|SUBJ))
 # no interactions
 
-m3 <- lmerTest::lmer(data = train, 
+m6 <- lmerTest::lmer(data = train, 
      MOT_MLU ~ VISIT * Diagnosis + (1|SUBJ) + (0 + VISIT|SUBJ))
-
-summary(m0)
-
-summary(m1)
-
-summary(m2)
 
 summary(m3)
 
-# Chosing m2 ia the best model
+summary(m4)
 
-anova(m2,m3) # not significant 
+summary(m5)
 
-r.squaredGLMM(m2)
+summary(m6)
 
-ggplot(df, aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = Diagnosis)) +
+anova(m3, m4, m5,m6) 
+# the best model is m5
+
+r.squaredGLMM(m5)
+
+
+ggplot(data = train,
+       aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = Diagnosis)) +
   geom_point(alpha = 0.7, position = position_jitter(w = 0.1, h = 0)) +
   facet_wrap(~SUBJ) +
   theme_minimal() +
@@ -309,61 +332,63 @@ Your task now is to figure out how to best describe the children linguistic traj
 
 
 ```{r ex4, include = FALSE}
-m5 <- lmerTest::lmer(data = train, 
+m7 <- lmerTest::lmer(data = train, 
      CHI_MLU ~ VISIT * Diagnosis * ExpressiveLangRaw1+ (1|SUBJ) + (0 + VISIT|SUBJ))
 
-anova(m1, m5)
+anova(m2, m7)
 
-r.squaredGLMM(m5)
-# model 5 is a better model than model 1 
+r.squaredGLMM(m7)
+# model 7 is a better model than model 2 
 
-m6 <- lmerTest::lmer(data = train, 
+m8 <- lmerTest::lmer(data = train, 
      CHI_MLU ~ VISIT * Diagnosis * ExpressiveLangRaw1 * Socialization1 + (1|SUBJ) + (0 + VISIT|SUBJ))
 
-anova(m5, m6)
-r.squaredGLMM(m6)
+anova(m7, m8)
+r.squaredGLMM(m8)
 
 # This is a better model but it might be over fitted 
 
-m7 <- lmerTest::lmer(data = train, 
+m9 <- lmerTest::lmer(data = train, 
      CHI_MLU ~ 1 + VISIT * Diagnosis * MOT_MLU * ExpressiveLangRaw1 + (1|SUBJ) + (0 + VISIT|SUBJ))
 
-summary(m7)
+summary(m9)
 
-anova(m6,m7)
-r.squaredGLMM(m7)
-
-m9 <- lmer(data = train, 
-     CHI_MLU ~ VISIT * Diagnosis * MOT_MLU * ExpressiveLangRaw1 + (1 + VISIT|SUBJ))
-
-anova(m7,m9)
-
-# m7 Explains the most
-
-m8 <- lmerTest::lmer(data = train, 
-     CHI_MLU ~ VISIT * Diagnosis * MOT_MLU + (1|SUBJ) + (0 + VISIT|SUBJ))
-
-anova(m6,m8)
+anova(m8,m9)
+r.squaredGLMM(m9)
 
 m10 <- lmer(data = train, 
-     CHI_MLU ~ 1 + VISIT * Diagnosis + VISIT * MOT_MLU + VISIT * ExpressiveLangRaw1 + (1 + VISIT|SUBJ))
+     CHI_MLU ~ VISIT * Diagnosis * MOT_MLU * ExpressiveLangRaw1 + (1 + VISIT|SUBJ))
 
-r.squaredGLMM(m10)
-anova(m7,m10)
+anova(m9,m10)
+
+# m9 Explains the most
 
 m11 <- lmerTest::lmer(data = train, 
+     CHI_MLU ~ VISIT * Diagnosis * MOT_MLU + (1|SUBJ) + (0 + VISIT|SUBJ))
+
+anova(m9,m11)
+
+m12 <- lmer(data = train, 
+     CHI_MLU ~ 1 + VISIT * Diagnosis + VISIT * MOT_MLU + VISIT * ExpressiveLangRaw1 +  (1|SUBJ) + (0 + VISIT|SUBJ))
+
+r.squaredGLMM(m12) ###### The model we will use
+anova(m9,m12)
+
+m13 <- lmerTest::lmer(data = train, 
      CHI_MLU ~ 1 + VISIT * ADOS1 * MOT_MLU * ExpressiveLangRaw1 + (1|SUBJ) + (0 + VISIT|SUBJ))
 
-r.squaredGLMM(m11)
+r.squaredGLMM(m13)
 
-anova(m7, m11)
+anova(m9, m13)
 
-m12 <- lmerTest::lmer(data = train, 
+m14 <- lmerTest::lmer(data = train, 
      CHI_MLU ~ 1 + VISIT * Diagnosis * ExpressiveLangRaw1 + ExpressiveLangRaw1 * MOT_MLU + (1 + VISIT|SUBJ))
 
-r.squaredGLMM(m12)
+r.squaredGLMM(m14)
 
-anova(m7, m11)
+anova(m9, m14)
+
+######## Notes from class ##############
 
 #3-way interactions are hard to interpret but explains the most - in a case of just wanting to being able to predict the new data 
 

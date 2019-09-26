@@ -130,11 +130,13 @@ fTrain <- subset(fTrain, !is.na(CHI_MLU))
 
 fTest <- subset(fTest, !is.na(CHI_MLU))
 
+fTest$Child.ID <- fTest$Child.ID + 66
+
 
 m7 <- lmer(data = fTrain, 
      CHI_MLU ~ 1 + Visit * Diagnosis * MOT_MLU * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
 
-# simplest model 
+# simplest model - going with this model
 m10 <- lmer(data = fTrain, 
      CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
 
@@ -146,7 +148,9 @@ rmse(fTrain$CHI_MLU, predict_m7) # RMSE = 0.34
 
 #- test the performance of the models on the test data (Tips: google the functions "predict()")
 predict_m7_test <- predict(m7, fTest, allow.new.levels = TRUE)
-rmse(fTest$CHI_MLU, predict_m7_test) # RMSE = 0.59
+rmse(fTest$CHI_MLU, predict_m7_test) # RMSE = 0.59 
+
+########## SPØRG OM DETTE !!!!!!!! hvorfor ændre tallet sig når vi ændre child id########
 
 
 ## MODEL 10
@@ -185,14 +189,17 @@ In this exercise you have to use cross-validation to calculate the predictive er
 
 
 ```{r}
+### Combining the test and training set ### 
+fTrain <- rbind(fTrain, fTest)
+
 #- Create the basic model of ChildMLU as a function of Time and Diagnosis (don't forget the random effects!).
 m0 <- lmer(data = fTrain, CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID))
 
 #- Make a cross-validated version of the model. (Tips: google the function "createFolds";  loop through each fold, train a model on the other folds and test it on the fold)
 
 # create folds
-folds_TD <- createFolds(unique(train$Child.ID[fTrain$Diagnosis == "TD"]), k = 5, list = FALSE) # list = FALSE returns vector instead of list
-folds_ASD <- createFolds(unique(train$Child.ID[fTrain$Diagnosis == "ASD"]), k = 5, list = FALSE) # list = FALSE returns vector instead of list
+folds_TD <- createFolds(unique(fTrain$Child.ID[fTrain$Diagnosis == "TD"]), k = 5, list = FALSE) # list = FALSE returns vector instead of list
+folds_ASD <- createFolds(unique(fTrain$Child.ID[fTrain$Diagnosis == "ASD"]), k = 5, list = FALSE) # list = FALSE returns vector instead of list
 
 
 # loop that assigns fold to each unique ID
@@ -200,33 +207,33 @@ fTrain$fold <- 0
 fold_TD_index <- 1
 fold_ASD_index <- 1
 for (id in unique(fTrain$Child.ID)){
-  if (train$Diagnosis[fTrain$Child.ID == id] == "TD") {
-    train$fold[fTrain$Child.ID == id] <- folds_TD[fold_TD_index]
+  if (fTrain$Diagnosis[fTrain$Child.ID == id] == "TD") {
+    fTrain$fold[fTrain$Child.ID == id] <- folds_TD[fold_TD_index]
     fold_TD_index <- fold_TD_index + 1 }
   else {
-    fTrain$fold[train$Child.ID == id] <- folds_ASD[fold_ASD_index]
+    fTrain$fold[fTrain$Child.ID == id] <- folds_ASD[fold_ASD_index]
     fold_ASD_index <- fold_ASD_index + 1 }
 }
 
 # print number of participants with specific diagnosis for each fold
-for (z in 1:max(train$fold)) {
-  message(paste("n for fold:", z, "ASD -" , length(unique(fTrain$Child.ID[train$fold == z & fTrain$Diagnosis == "ASD"]))))
-  message(paste("n for fold:", z, "TD  -" , length(unique(fTrain$Child.ID[train$fold == z & fTrain$Diagnosis == "TD"]))))
+for (z in 1:max(fTrain$fold)) {
+  message(paste("n for fold:", z, "ASD -" , length(unique(fTrain$Child.ID[fTrain$fold == z & fTrain$Diagnosis == "ASD"]))))
+  message(paste("n for fold:", z, "TD  -" , length(unique(fTrain$Child.ID[fTrain$fold == z & fTrain$Diagnosis == "TD"]))))
 }
 
 
 performances <- c() # initialize empty vector for registering performances
 # loop for running cross validation
-for (i in 1:max(train$fold)) { 
+for (i in 1:max(fTrain$fold)) { 
   # initialize empty train and testing set dataframes for each iteration
-  train_set <- as.data.frame(train[0,])
-  test_set <- as.data.frame(train[0,])
+  train_set <- as.data.frame(fTrain[0,])
+  test_set <- as.data.frame(fTrain[0,])
   prediction <- c() # init empty prediction vector
   fold_index <- as.integer(as.character(i)) # convert i to integer
   
   # assign test and training set depending on 
-  train_set <- train[fTrain$fold != fold_index,]
-  test_set <- train[fTrain$fold == fold_index,]
+  train_set <- fTrain[fTrain$fold != fold_index,]
+  test_set <- fTrain[fTrain$fold == fold_index,]
   
   # model setup
   m0 <- lmer(data = train_set, CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID))
@@ -245,28 +252,30 @@ performances
 ###### WITH THE CVMS PACKAGE ######
 
 pacman::p_load(cvms, groupdata2, knitr, dplyr, ggplot2)
-
-data <- fold(fTrain, k = 5,
+newdata = fTrain
+data <- fold(newdata, k = 5,
              cat_col = 'Diagnosis',
              id_col = 'Child.ID') %>% 
   arrange(.folds)
 
+###### Virkede uden samlede data - kan nogen hjælpe ???? ######
 
 cross_m0 <- cross_validate(data, "CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID)", 
                fold_cols =".folds",
                family = "gaussian", 
                REML = FALSE)
 
-cross_m0
+cross_m0$model <- c('Basic model')
+
 
 cross_m1 <- cross_validate(data, "CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID)", 
                fold_cols =".folds",
                family = "gaussian", 
                REML = FALSE)
 
-cross_m1
+cross_m1$model <- c('model 2')
 
-
+Model_overview <- rbind(cross_m0, cross_m1)
 ```
 
 [HERE GOES YOUR ANSWER]
@@ -284,6 +293,18 @@ You want to evaluate:
 - how does the child fare compared to the model predictions at Visit 6? Is the child below or above expectations? (tip: use the predict() function on Bernie's data only and compare the prediction with the actual performance of the child)
 
 ```{r}
+### Bernie is Child.ID 68 #### compared the original dataset with the anominized
+
+Bernie <- fTrain[fTrain$Child.ID == 68,]
+
+Total_data <- fTrain[fTrain$Child.ID != 68,]
+
+Total_data_TD <- Total_data[Total_data$Diagnosis == 'TD',]
+
+group_by(Total_data_TD, Visit) %>% 
+  mean(CHI_MLU)
+
+mean(Total_data_TD$CHI_MLU) - Bernie$CHI_MLU
 
 ```
 
