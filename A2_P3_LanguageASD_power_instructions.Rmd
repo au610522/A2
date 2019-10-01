@@ -9,6 +9,11 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+### If we do not have enough power we either increase the power ( more participants ) or make a simpler model 
+# We can have to much power - cost; to much data (p-value) will give significant p-values but a low effect size - to much power if you concern yourself with p-values; ethical concerns 
+
+
+
 ## Welcome to the third exciting part of the Language Development in ASD exercise
 
 In this part of the assignment, we try to figure out how a new study should be planned (i.e. how many participants?) in order to have enough power to replicate the findings (ensuring our sample size is adequate, our alpha at 0.05 and our beta at 0.8):
@@ -39,6 +44,55 @@ You will be using:
 
 ```{r}
 
+pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret, MuMIn)
+pacman::p_load(rlist, simr)
+
+install.packages('simr', dependencies = T)
+
+#Loading data - using the function from part 2 
+
+#Training set
+demo_train <- read.csv('demo_train.csv', header = T, sep =',')
+token_train <- read.csv('token_train.csv', header = T, sep =',')
+LU_train <- read.csv('LU_train.csv', header = T, sep = ',')
+
+#Testing set
+demo_test <- read.csv('demo_test.csv', header = T, sep =',')
+token_test <- read.csv('token_test.csv', header = T, sep =',')
+LU_test <- read.csv('LU_test.csv', header = T, sep = ',')
+
+# Cleaning the data
+train <- CleanUpData(demo_train, LU_train, token_train)
+train <- subset(train, !is.na(CHI_MLU))
+
+test <- CleanUpData(demo_test,LU_test,token_test)
+test <- subset(test, !is.na(CHI_MLU))
+test$Child.ID <- test$Child.ID + 66
+
+train$Visit <- as.integer(train$Visit)
+
+#Our best model - fitting the model
+m10 <- lmer(data = train, 
+     CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
+
+# Basic model - since the powerSim does not work at the moment 
+m0 <- lmer(data = train, 
+     CHI_MLU ~  Diagnosis + Visit + (1|Child.ID))
+
+#assissing the power of our interactions 
+# needs to be above 80% 
+powerSim(m0, test=fixed('Visit'), nsim = 50) # effect size = 0.23, power of 100% 
+powerSim(m0, test=fixed('Diagnosis'), nsim = 50) # power of 96% 
+# powerSim(m0, test=fixed('Visit:Diagnisis'), nsim = 50)
+
+# using powerCurve
+m2 <‐ extend(m0, along="Child.ID", n=15)
+
+?powerCurve
+
+pc1 <‐ powerCurve(m2, along="Child.ID")
+
+plot(pc1)
 ```
 
 
