@@ -182,23 +182,6 @@ m1 <- lmer(data = train,
 m2 <- lmerTest::lmer(data = train, 
      CHI_MLU ~ VISIT * Diagnosis + (1|SUBJ) + (0 + VISIT|SUBJ))
 
-
-### Notes taken in class ###
-
-#Using lmer => random effects 
-# => the child ID is important 
-# => + (1|ID) => everyone has a different starting point => the unikness of the child only is related to the intersept => all kids will be parallel, where all ASD will be parallel and all TD will be paralel 
-# That is why it is not enough 
-# adding to it, that the child ID all so might affect visit => variaing effect => (0 + Visit|ID)
-# adding (1 + visit | ID) is meaning that the two things are related 
-
-
-#### Adding Verbal IQ 
-# tries to explain some of the variance - add it as an interaction - it does not only affect where you start but also how you develop - meaning it affects you the same no matter if you have ASD or not - this is not what we want so we add it directly (Diagnosis * Visit * Verbal IQ) 
-
-#### Want to add both non verbal iq and socialization => this would create a lot of models
-
-### Want us to find the best posible model
 ```
 
 How would you evaluate whether the model is a good model?
@@ -206,14 +189,19 @@ We want to look for a model that explains a lot of the variance (looking at the 
 
 
 ```{r ex2 evaluate, include = FALSE}
+
 summary(m1)
 
 summary(m2)
 
+# checking if it is normally distributed 
 qqnorm(residuals(m2))
 
 anova(m1, m2)
 #model 2 is better than model 1 since it has a lower AIC and also explainse significantly more of the variance 
+
+r.squaredGLMM(m1)
+# When looking at the marginal R2 the model only predicts around 17% of the variance
 
 r.squaredGLMM(m2)
 # When looking at the marginal R2 the model only predicts around 35% of the variance but when including the random effects in the conditional R2 we see that almost 82% of the variance is explained. This means that the random effects explain a great deal of the variance, and this will not be good if we want to make a generalized model.
@@ -232,7 +220,7 @@ First build the different models, then compare them to see which one is better.
 Exciting right? Let's check whether the model is doing an alright job at fitting the data. Plot the actual CHI_MLU data against the predictions of the model fitted(model). 
 
 ```{r}
-# saving train in a new data frame befor changing it
+# saving train in a new data frame before changing it
 df <- train
 
 #adding the predicted values to each trail based on model 2
@@ -308,10 +296,20 @@ anova(m3, m4, m5,m6)
 # the best model is m5
 
 r.squaredGLMM(m5)
+r.squaredGLMM(m6)
 
+#ggplot(data = train,
+#       aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = Diagnosis)) +
+#  geom_point(alpha = 0.7, position = position_jitter(w = 0.1, h = 0)) +
+#  facet_wrap(~SUBJ) +
+#  theme_minimal() +
+#  geom_smooth(method = "lm", se = FALSE, size = 0.4, aes(y=fit)) +
+#  labs(title = "Model prediction on current data",
+#       x = "Visit",
+#       y = "Mean length of utterance",
+#       color = "Diagnosis")
 
-ggplot(data = train,
-       aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = Diagnosis)) +
+ggplot(df, aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = Diagnosis)) +
   geom_point(alpha = 0.7, position = position_jitter(w = 0.1, h = 0)) +
   facet_wrap(~SUBJ) +
   theme_minimal() +
@@ -388,22 +386,6 @@ m14 <- lmerTest::lmer(data = train,
 r.squaredGLMM(m14)
 
 anova(m9, m14)
-
-######## Notes from class ##############
-
-#3-way interactions are hard to interpret but explains the most - in a case of just wanting to being able to predict the new data 
-
-# Theory 
-# Think about what parameters affect on the language development before you look at the data => that is what you are going to test => publiching it before running the experiment => does not allow you to explore the data 
-
-# Lasso
-# using a max model => putting in all the variables : Taking all the data and removing all the beta that is between -1 and 1 and exclude those values and runs it again until there no longer is any that fall between -1 and 1 
-# dividing all the betas with the sum of the betas 
-# a small effect is more likely to be overfitting 
-# letting he data talk for its own
-
-# Doing something in between 
-# finding some good variables and models
 
 ```
 
