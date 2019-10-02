@@ -76,11 +76,9 @@ Load necessary libraries : what will you need?
 
 ```{r Load Libraries, include = FALSE}
 library(pacman)
-
-p_load(tidyverse, lmerTest, ggplot2, MuMIn)
-
 install.packages("MuMIn")
 
+p_load(tidyverse, lmerTest, ggplot2, MuMIn)
 p_load(modelr)
 
 library(MuMIn)
@@ -157,18 +155,22 @@ Remember to plot the data first and then to run a statistical test.
 
 # A plot of the average development of each group in mean length of utterances (CHI_MLU) over visits - each participant with their own color, line showing the average development, one plot for each group
 ggplot(data = train,
-       aes(x = VISIT, y = CHI_MLU, group = Diagnosis, color = SUBJ)) +
+       aes(x = VISIT, y = CHI_MLU, group = Diagnosis, color = Diagnosis)) +
   geom_smooth(method = lm) +
   geom_point() + 
-  facet_wrap(.~ Diagnosis)
+  theme_minimal() +
+  labs(title = "The mean development of mean length of utterance for ASD and TD over visits") +
+  xlab("Visit") + ylab("Mean length utterance for children")
 
 # Shows that there is a more even development in TD than ASD and also that the average MLU is higher for TD, especially at visit 6. The ASD graph has more variance 
 
 # A plot where there is created a line for each participants estimated development. Shows that there is a great deal more variance in the development of ASD children where most of the TD children develop in the same way.
-ggplot(train, aes(x = VISIT, y = CHI_MLU, group = SUBJ, color = SUBJ)) +
+ggplot(train, aes(x = VISIT, y = CHI_MLU, group = SUBJ, color = Diagnosis)) +
   geom_smooth(method = 'lm', se = FALSE) +
   facet_wrap(~Diagnosis) +
-  theme_minimal()
+  theme_minimal()+
+  labs(title = "Development of mean length of utterance for ASD and TD over visits") +
+  xlab("Visit") + ylab("Mean length utterance for children")
 
 # Concluding: ASD has more variance thant TD kids 
 
@@ -238,6 +240,7 @@ ggplot(df, aes(x = VISIT, y = CHI_MLU, group = SUBJ, color = Diagnosis)) +
        color = "Diagnosis")
 
 
+
 ```
 
 Now it's time to report our results.
@@ -246,8 +249,13 @@ Remember to report:
 - A plain word description of the results
 - A plot of your model's predictions (and some comments on whether the predictions are sensible)
 
-[REPORT THE RESULTS]
-Linguistic development of children MLU is affected by ... [COMPLETE]
+Model 1: The development of child MLU significantly changed over visits, β = 0.23 (SE = 0.02), t = 9.94, p < .05. However, diagnosis didn’t seem to have significant influence on the development of child MLU, β = 0.05 (SE = 0.16), t = 0.29, p > .05.When calculating the root mean squared error (RMSE) we get an R2-marginal is 0.169 and an R2-conditional of 0.823 which means that the only around 17% of the variance in the data is explained by the fixed effects of time and diagnosis.
+
+Model 2: shows that the interaction effect between visit and diagnosis significantly explained development of child MLU, β = 0.25 (SE = 0.04), t = 6.92, p < .05.
+When looking at the R2-marginal for our second model, we get a value of 0.343. This shows that it explains about 34% of the variance, which shows that the interaction effect is a better model for the prediction of Child MLU than the basic model, but it is still not optimal. We also compared the two models with an anova and saw that the model had a lower AIC value.
+
+Comments to the plot: We used the model to predict the development of the different participants. This can be seen in the table below. The plot shows the model prediction of the actual data points for each individual. Furthermore, one can distinguish between the two diagnoses, where pink and blue indicates children with ASD and TD respectively.
+
 
 ## Let's test hypothesis 2: Parents speak equally to children with ASD and TD  (Exercise 3)
 
@@ -256,17 +264,23 @@ Linguistic development of children MLU is affected by ... [COMPLETE]
 ```{r ex3, include = FALSE}
 # A plot over the average difference in parents MLU depending on diagnosis 
 ggplot(data = train,
-       aes(x = VISIT, y = MOT_MLU, group = Diagnosis, color = SUBJ)) +
+       aes(x = VISIT, y = MOT_MLU, group = Diagnosis, color = Diagnosis)) +
   geom_smooth(method = lm) +
   geom_point() + 
-  facet_wrap(.~ Diagnosis)
+  #facet_wrap(.~ Diagnosis) +
+  theme_minimal() +
+  labs(title = "Mean development of mean length of utterance for parents of ASD and TD over visits") +
+  xlab("Visit") + ylab("Mean length utterance for parents")
 # Shows that TD parents on average talks more but it shows they have almost the same slope, meaning they develop in the same way 
 
 # Shows an estimated line for each parent
-ggplot(train, aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = SUBJ)) +
+ggplot(train, aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = Diagnosis)) +
   geom_smooth(method = 'lm', se = FALSE) +
   facet_wrap(~Diagnosis) +
-  theme_minimal()
+  theme_minimal() + 
+  labs(title = "Development of mean length of utterance for ASD and TD over visits") +
+  xlab("Visit") + ylab("Mean length utterance for children")
+
 # Shows that there is fare more variance in the parents speach than the childrens. The variance can also be seen in the TD parents 
 
 # Assuming that the intercept does not affect the slop 
@@ -298,32 +312,30 @@ anova(m3, m4, m5,m6)
 r.squaredGLMM(m5)
 r.squaredGLMM(m6)
 
-#ggplot(data = train,
-#       aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = Diagnosis)) +
-#  geom_point(alpha = 0.7, position = position_jitter(w = 0.1, h = 0)) +
-#  facet_wrap(~SUBJ) +
-#  theme_minimal() +
-#  geom_smooth(method = "lm", se = FALSE, size = 0.4, aes(y=fit)) +
-#  labs(title = "Model prediction on current data",
-#       x = "Visit",
-#       y = "Mean length of utterance",
-#       color = "Diagnosis")
+# fitting the model to the data 
+df$fit_MOt <- predict(m5)
 
 ggplot(df, aes(x = VISIT, y = MOT_MLU, group = SUBJ, color = Diagnosis)) +
   geom_point(alpha = 0.7, position = position_jitter(w = 0.1, h = 0)) +
   facet_wrap(~SUBJ) +
   theme_minimal() +
-  geom_smooth(method = "lm", se = FALSE, size = 0.4, aes(y=fit)) +
+  geom_smooth(method = "lm", se = FALSE, size = 0.4, aes(y=fit_MOt)) +
   labs(title = "Model prediction on current data",
        x = "Visit",
        y = "Mean length of utterance",
        color = "Diagnosis")
 ```
 
-The R2 margen for adults shows that visit and diagnosis explains about 20 % of the variance where R2 conditional includes the random effects and explaince about 65%. This suggests that time and diagnosis can affect the Parent MLU but this might not be the only thing.
+Model 3: The diagnosis fixed effect seemed to have influence on parent MLU, β = 0.42 (SE = 0.14), t = 3.02, p < .05
 
-Parent MLU is affected by ... but probably not ...
-[REPORT THE RESULTS]
+Model 4: Model 4 showed that parent MLU was significantly explained by the Visit fixed effect, suggesting that parents MLU increased over time, β =0.12 (SE = 0.02), t = 7.55, p < .05
+ 
+* the chosen model * Model 5: Both visit β =0.12 (SE = 0.02), t = 7.97, p < .05 and diagnosis β =0.46 (SE = 0.12), t = 3.79, p < .05 significantly explained parent MLU 
+
+Model 6: The interaction effect between Visit and Diagnosis was not able to explain parents MLU significantly, β =0.04 (SE = 0.03), t = 1.30, p > .05
+
+Conclusion: Model 5 turns out to be the bedst model when looking at the anova and it turns out that it explains about 20 % of the variance where R2 conditional includes the random effects and explaince about 65%. This suggests that time and diagnosis can affect the Parent MLU but this might not be the only thing or a fullfilling model.
+
 
 ### Adding new variables (Exercise 4)
 
@@ -367,36 +379,28 @@ m11 <- lmerTest::lmer(data = train,
 
 anova(m9,m11)
 
-m12 <- lmer(data = train, 
+C_MLU_model <- lmer(data = train, 
      CHI_MLU ~ 1 + VISIT * Diagnosis + VISIT * MOT_MLU + VISIT * ExpressiveLangRaw1 +  (1|SUBJ) + (0 + VISIT|SUBJ))
 
-r.squaredGLMM(m12) ###### The model we will use
-anova(m9,m12)
+summary(C_MLU_model)
+
+r.squaredGLMM(C_MLU_model) ###### The model we will use
+anova(m2,C_MLU_model)
 
 m13 <- lmerTest::lmer(data = train, 
      CHI_MLU ~ 1 + VISIT * ADOS1 * MOT_MLU * ExpressiveLangRaw1 + (1|SUBJ) + (0 + VISIT|SUBJ))
 
 r.squaredGLMM(m13)
 
-anova(m9, m13)
+anova(C_MLU_model, m13)
 
-m14 <- lmerTest::lmer(data = train, 
-     CHI_MLU ~ 1 + VISIT * Diagnosis * ExpressiveLangRaw1 + ExpressiveLangRaw1 * MOT_MLU + (1 + VISIT|SUBJ))
-
-r.squaredGLMM(m14)
-
-anova(m9, m14)
+anova(C_MLU_model, m14)
 
 ```
 
-In addition to ..., the MLU of the children is also correlated with ...
-Using AIC / nested F-tests as a criterium, we compared models of increasing complexity and found that ...
+Variables used in the model: visit, diagnosis, parents MLU and the expressive language of the child at the first visit.
 
-
-Our best model was model 7 but hard to explain 
-Otherwise model 10 was a great alternative that is easier to explain
-
-[REPORT THE RESULTS]
+The final model was C_MLU_model, it had the lowest AIC without having 3 way interactions that makes the model more complex to understand 
 
 ```{r}
 # Applying the function from part 2 to the original data 
