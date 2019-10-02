@@ -368,7 +368,7 @@ anova(m8,m9)
 r.squaredGLMM(m9)
 
 m10 <- lmer(data = train, 
-     CHI_MLU ~ VISIT * Diagnosis * MOT_MLU * ExpressiveLangRaw1 + (1 + VISIT|SUBJ))
+     CHI_MLU ~ VISIT * Diagnosis * MOT_MLU * ExpressiveLangRaw1 +(1|SUBJ) + (0 + VISIT|SUBJ))
 
 anova(m9,m10)
 

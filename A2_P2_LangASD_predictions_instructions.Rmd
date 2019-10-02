@@ -122,55 +122,52 @@ CleanUpData <- function(Demo,LU,Word){
 
 #- optional: predictions are never certain, can you identify the uncertainty of the predictions? (e.g. google predictinterval())
 
-fTrain <- CleanUpData(demo_train, LU_train, token_train)
+train <- CleanUpData(demo_train, LU_train, token_train)
 
-fTest <- CleanUpData(demo_test,LU_test,token_test)
+test <- CleanUpData(demo_test,LU_test,token_test)
 
-fTrain <- subset(fTrain, !is.na(CHI_MLU))
+train <- subset(train, !is.na(CHI_MLU))
 
-fTest <- subset(fTest, !is.na(CHI_MLU))
+test <- subset(test, !is.na(CHI_MLU))
 
-fTest$Child.ID <- fTest$Child.ID + 66
+test$Child.ID <- test$Child.ID + 66
 
 
-m7 <- lmer(data = fTrain, 
-     CHI_MLU ~ 1 + Visit * Diagnosis * MOT_MLU * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
-
-# simplest model - going with this model
-m10 <- lmer(data = fTrain, 
+# simplest model - C_MLU_model
+C_MLU_model <- lmer(data = train, 
      CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
 
-## MODEL 7
-predict_m7 <- predict(m7)
+predict_model <- predict(C_MLU_model)
 
 #- calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
-rmse(fTrain$CHI_MLU, predict_m7) # RMSE = 0.34
+rmse(train$CHI_MLU, predict_model) # RMSE = 0.35
 
 #- test the performance of the models on the test data (Tips: google the functions "predict()")
-predict_m7_test <- predict(m7, fTest, allow.new.levels = TRUE)
-rmse(fTest$CHI_MLU, predict_m7_test) # RMSE = 0.59 
-
-########## SPØRG OM DETTE !!!!!!!! hvorfor ændre tallet sig når vi ændre child id########
+predict_model_test <- predict(C_MLU_model, test, allow.new.levels = TRUE)
+rmse(test$CHI_MLU, predict_model_test) # RMSE = 0.43 
 
 
 ## MODEL 10
+m10 <- lmer(data = train, 
+     CHI_MLU ~ Visit * Diagnosis * MOT_MLU * verbalIQ1 +(1|Child.ID) + (0 + Visit|Child.ID))
+
 predict_m10 <- predict(m10)
 
 #- calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
-rmse(fTrain$CHI_MLU, predict_m10) # RMSE = 0.35
+rmse(train$CHI_MLU, predict_m10) # RMSE = 0.34
 
 #- test the performance of the models on the test data (Tips: google the functions "predict()")
-predict_m10_test <- predict(m10, fTest, allow.new.levels = TRUE)
-rmse(fTest$CHI_MLU, predict_m10_test) # RMSE = 0.58
+predict_m10_test <- predict(m10, test, allow.new.levels = TRUE)
+rmse(test$CHI_MLU, predict_m10_test) # RMSE = 0.40
 
 ```
 
-So, the model prediction performance on the test data for model 7 shows a root mean squared error of 0.59 MLU which is almost twice the size of the error on the train data (0.34).
+So, the model prediction performance on the test data for our prefered model (C_MLU_model) shows a root mean squared error of 0.35 MLU which is higher than the error on the train data (0.43).
+
 Therefore, we might have over fitted the model on the train data and it is not as good at predicting on novel data. On the other hand it can still be argued that it is an acceptal model depending on how conservative you are. 
 
-For model 10 we see that there is almost no difference from the first model (0.35 MLU for the training set and 0.58 MLU for the testing set). This model is on the other hand easier to interpret.
+For model 10 we see that there is almost no difference from the first model (0.34 MLU for the training set and 0.40 MLU for the testing set). This model is on the other hand easier to interpret.
 
-[HERE GOES YOUR ANSWER]
 
 ### Exercise 2) Model Selection via Cross-validation (N.B: ChildMLU!)
 
@@ -190,82 +187,122 @@ In this exercise you have to use cross-validation to calculate the predictive er
 
 ```{r}
 ### Combining the test and training set ### 
-fTrain <- rbind(fTrain, fTest)
+#train <- rbind(train, test)
 
 #- Create the basic model of ChildMLU as a function of Time and Diagnosis (don't forget the random effects!).
-m0 <- lmer(data = fTrain, CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID))
+m0 <- lmer(data = train, CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID))
 
 #- Make a cross-validated version of the model. (Tips: google the function "createFolds";  loop through each fold, train a model on the other folds and test it on the fold)
 
-# create folds
-folds_TD <- createFolds(unique(fTrain$Child.ID[fTrain$Diagnosis == "TD"]), k = 5, list = FALSE) # list = FALSE returns vector instead of list
-folds_ASD <- createFolds(unique(fTrain$Child.ID[fTrain$Diagnosis == "ASD"]), k = 5, list = FALSE) # list = FALSE returns vector instead of list
+###### Creating our own loop #########
 
-
-# loop that assigns fold to each unique ID
-fTrain$fold <- 0
-fold_TD_index <- 1
-fold_ASD_index <- 1
-for (id in unique(fTrain$Child.ID)){
-  if (fTrain$Diagnosis[fTrain$Child.ID == id] == "TD") {
-    fTrain$fold[fTrain$Child.ID == id] <- folds_TD[fold_TD_index]
-    fold_TD_index <- fold_TD_index + 1 }
-  else {
-    fTrain$fold[fTrain$Child.ID == id] <- folds_ASD[fold_ASD_index]
-    fold_ASD_index <- fold_ASD_index + 1 }
-}
-
-# print number of participants with specific diagnosis for each fold
-for (z in 1:max(fTrain$fold)) {
-  message(paste("n for fold:", z, "ASD -" , length(unique(fTrain$Child.ID[fTrain$fold == z & fTrain$Diagnosis == "ASD"]))))
-  message(paste("n for fold:", z, "TD  -" , length(unique(fTrain$Child.ID[fTrain$fold == z & fTrain$Diagnosis == "TD"]))))
-}
-
-
-performances <- c() # initialize empty vector for registering performances
-# loop for running cross validation
-for (i in 1:max(fTrain$fold)) { 
-  # initialize empty train and testing set dataframes for each iteration
-  train_set <- as.data.frame(fTrain[0,])
-  test_set <- as.data.frame(fTrain[0,])
-  prediction <- c() # init empty prediction vector
-  fold_index <- as.integer(as.character(i)) # convert i to integer
+# loop assigning folds to dataframe by participant and diagnosis
+for (id in unique(train$Child.ID)){ # loop through each unique participant
   
-  # assign test and training set depending on 
-  train_set <- fTrain[fTrain$fold != fold_index,]
-  test_set <- fTrain[fTrain$fold == fold_index,]
+  ### Run at first iteration (setup variables)
+  if (id == min(unique(train$Child.ID))) {
+    # create folds for each diagnosis
+    # list = FALSE returns vector instead of list
+    fold_list_TD <- createFolds(unique(train$Child.ID[train$Diagnosis == "TD"]), k = 5, list = FALSE)
+    fold_list_ASD <- createFolds(unique(train$Child.ID[train$Diagnosis == "ASD"]), k = 5, list = FALSE)
+    
+    # identifiers for counting values in folds
+    fold_i_TD <- 1
+    fold_i_ASD <- 1 }
+  
+  
+  ### Run at every iteration (assign folds to dataframe)
+  if (unique(train$Diagnosis[train$Child.ID == id]) == "TD") { # if participant has diagnosis == TD
+    train$fold[train$Child.ID == id] <- fold_list_TD[fold_i_TD] # assign fold-value from fold_list_TD vector
+    # update identifier
+    fold_i_TD <- fold_i_TD + 1 }
+  else {
+    train$fold[train$Child.ID == id] <- fold_list_ASD[fold_i_ASD]
+    fold_i_ASD <- fold_i_ASD + 1 }
+  
+  
+  ### Run at last iteration (print information and cleanup)
+  if (id == max(unique(train$Child.ID))) {
+    message(paste(""))
+    # this is just for checking distribution, can be deleted, also why it's not commented
+    for (i in 1:max(train$fold)) {
+      TD_in_fold <- length(unique(train$Child.ID[train$fold == i & train$Diagnosis == "TD"]))
+      ASD_in_fold <- length(unique(train$Child.ID[train$fold == i & train$Diagnosis == "ASD"]))
+      percent_TD <- ceiling((TD_in_fold / (TD_in_fold + ASD_in_fold)) * 100)
+      percent_ASD <- floor((ASD_in_fold / (TD_in_fold + ASD_in_fold)) * 100)
+      message(paste("n for fold:", i, "  TD:", TD_in_fold, "  ASD:", ASD_in_fold, "  %TD / %ASD :", percent_TD, "/", percent_ASD))
+      if (i == max(train$fold)) {
+        total_TD <- length(unique(train$Child.ID[train$Diagnosis == "TD"]))
+        total_ASD <- length(unique(train$Child.ID[train$Diagnosis == "ASD"]))
+        percent_TD <- (total_TD / (total_TD + total_ASD)) * 100
+        percent_ASD <- (total_ASD / (total_TD + total_ASD)) * 100
+        message(paste(""))
+        message(paste("Total %TD / %ASD :", percent_TD, "/", percent_ASD))
+        rm(TD_in_fold, ASD_in_fold, percent_TD, percent_ASD, total_ASD, total_TD, i) }
+    }
+    # cleanup enviroment
+    rm(fold_i_ASD, fold_i_TD, fold_list_ASD, fold_list_TD, id) }
+}
+
+
+# loop through each fold, training on k-1 folds and testing on the remaining fold
+for (i in 1:max(train$fold)) { # run loop k times
+  
+  # initialize performance vector for registering RMSE performances if i == 1
+  if (i == 1){
+    performance <- c() }
+  
+  # init empty prediction vector for each iteration
+  prediction <- c()
+  # initialize empty train and testing sets for each iteration
+  train_fold <- as.data.frame(train[0,])
+  test_fold <- as.data.frame(train[0,])
+  fold_iteration <- as.integer(as.character(i)) # convert i to integer
+  
+  # assign test and training folds depending on current identifier value
+  train_fold <- train[train$fold != fold_iteration,]
+  test_fold <- train[train$fold == fold_iteration,]
   
   # model setup
-  m0 <- lmer(data = train_set, CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID))
+  m1 <- lmer(data = train_fold, CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID))
   
   # run prediction
-  prediction <- predict(m0, test_set, allow.new.levels = TRUE) # run prediction
-  fold_rmse <- rmse(test_set$CHI_MLU, prediction) # calculate rmse for each fold
-  message(paste("RMSE for fold", fold_index, fold_rmse)) # print RMSE for each fold to console
-  performances[i] <- fold_rmse # register rmse value to 'performances'vector
+  prediction <- predict(m1, test_fold, allow.new.levels = TRUE) # run prediction on testing fold
+  performance[i] <- rmse(test_fold$CHI_MLU, prediction) # calculate rmse for each fold and append to performance vector
+  #fold_rmse <- rmse(test_fold$CHI_MLU, prediction) # calculate rmse for each fold
+  #performance[i] <- fold_rmse # register rmse value to 'performances'vector
+  message(paste("RMSE for fold", fold_iteration, performance[i])) # print RMSE for each fold to console
+  
+  if (i == max(train$fold)) { # if it is the last iteration, calculate, print and save mean RMSE
+    performance = mean(performance)
+    message(paste(""))
+    message(paste("Mean RMSE for model:", performance)) # print mean RMSE score
+    # remove temporary variables
+    rm(test_fold, train_fold, fold_iteration, prediction, m1) }
 }
 
-# calculate mean RMSE and print it
-performances = mean(performances)
-performances
+
+
 
 ###### WITH THE CVMS PACKAGE ######
 
 pacman::p_load(cvms, groupdata2, knitr, dplyr, ggplot2)
-newdata = fTrain
+newdata = train
 data <- fold(newdata, k = 5,
              cat_col = 'Diagnosis',
              id_col = 'Child.ID') %>% 
   arrange(.folds)
 
-###### Virkede uden samlede data - kan nogen hjælpe ???? ######
+data$Diagnosis <- as.factor(data$Diagnosis)
 
-cross_m0 <- cross_validate(data, "CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit | Child.ID)", 
+
+cross_m0 <- cross_validate(data, "CHI_MLU ~ 1 + Visit + Diagnosis + (1|Child.ID) + (0 + Visit|Child.ID)", 
                fold_cols =".folds",
                family = "gaussian", 
                REML = FALSE)
 
 cross_m0$model <- c('Basic model')
+
 
 
 cross_m1 <- cross_validate(data, "CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID)", 
@@ -275,10 +312,20 @@ cross_m1 <- cross_validate(data, "CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_
 
 cross_m1$model <- c('model 2')
 
-Model_overview <- rbind(cross_m0, cross_m1)
+cross_m2 <- cross_validate(data, "CHI_MLU ~ 1 + Visit * Diagnosis  * MOT_MLU  * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID)", 
+               fold_cols =".folds",
+               family = "gaussian", 
+               REML = FALSE)
+
+cross_m2$model <- c('model 3')
+
+Model_overview <- rbind(cross_m0,cross_m1)
+Model_overview <- rbind(Model_overview, cross_m2)
 ```
 
-[HERE GOES YOUR ANSWER]
+Above, we have compared our C_MLU_model with the basic model and found that it has a RMSE of 0.57 and the basic model has a higer RMSE of 0.86. That means that our model is a better predicter than the basic model.
+On the other hand we have also conducted cross validation of the more complecated model (m10) and found that it has a lower RMSE (0.54) and a lower AIC than the C_MLU_model. The problem is still that it is a more complecated model that is hard to interpret so it is a question if it is worth the traidoff 
+
 
 ### Exercise 3) Assessing the single child
 
@@ -294,18 +341,49 @@ You want to evaluate:
 
 ```{r}
 ### Bernie is Child.ID 68 #### compared the original dataset with the anominized
+train <- rbind(train, test)
 
-Bernie <- fTrain[fTrain$Child.ID == 68,]
+Bernie <- train[train$Child.ID == 68,]
 
-Total_data <- fTrain[fTrain$Child.ID != 68,]
+Total_data <- train[train$Child.ID != 68,]
 
 Total_data_TD <- Total_data[Total_data$Diagnosis == 'TD',]
 
-group_by(Total_data_TD, Visit) %>% 
-  mean(CHI_MLU)
+# how does the child fare in ChildMLU compared to the average TD child at each visit? 
 
-mean(Total_data_TD$CHI_MLU) - Bernie$CHI_MLU
+for (i in 1:6) {
+  visit <- Total_data_TD[Total_data_TD$Visit == i,]
+  bernie_difference <- mean(visit$CHI_MLU) - mean(Bernie$CHI_MLU[Bernie$Visit == i])
+  message(paste("Difference in CHI_MLU for Bernie at Visit", i, ": ", bernie_difference , ':', mean(visit$CHI_MLU)))
+  
+  if (i == 6){
+    rm(visit, bernie_difference) }
+}
 
+# Define the distance in terms of absolute difference between this Child and the average TD.
+mean(Total_data_TD$CHI_MLU) - mean(Bernie$CHI_MLU)
+
+
+#how does the child fare compared to the model predictions at Visit 6?
+Bpredictions <- predict(C_MLU_model, Bernie, allow.new.levels = TRUE)
+rmse(Bernie$CHI_MLU[Bernie$Visit == 6], Bpredictions)
+
+Bpredictions[6] - Bernie$CHI_MLU[6]
+
+
+
+## Comparing to ASD
+
+Total_data_ASD <- Total_data[Total_data$Diagnosis == 'ASD',]
+
+for (i in 1:6) {
+  visit <- Total_data_ASD[Total_data_ASD$Visit == i,]
+  bernie_difference <- mean(visit$CHI_MLU) - mean(Bernie$CHI_MLU[Bernie$Visit == i])
+  message(paste("Difference in CHI_MLU for Bernie at Visit", i, ": ", bernie_difference , ':', mean(visit$CHI_MLU)))
+  
+  if (i == 6){
+    rm(visit, bernie_difference) }
+}
 ```
 
 

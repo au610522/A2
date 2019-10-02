@@ -71,28 +71,35 @@ test$Child.ID <- test$Child.ID + 66
 
 train$Visit <- as.integer(train$Visit)
 
-#Our best model - fitting the model
-m10 <- lmer(data = train, 
-     CHI_MLU ~ 1 + Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0 + Visit|Child.ID))
 
-# Basic model - since the powerSim does not work at the moment 
-m0 <- lmer(data = train, 
-     CHI_MLU ~  Diagnosis + Visit + (1|Child.ID))
+# Model
+C_MLU_model <- lmer(data = train, CHI_MLU ~ Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0+Visit|Child.ID))
 
-#assissing the power of our interactions 
-# needs to be above 80% 
-powerSim(m0, test=fixed('Visit'), nsim = 50) # effect size = 0.23, power of 100% 
-powerSim(m0, test=fixed('Diagnosis'), nsim = 50) # power of 96% 
-# powerSim(m0, test=fixed('Visit:Diagnisis'), nsim = 50)
+summary(C_MLU_model)
 
-# using powerCurve
-m2 <‐ extend(m0, along="Child.ID", n=15)
+# Power simulation on the fixed interaction effects
+powerSim(C_MLU_model, test = fixed("Visit:Diagnosis"), nsim = 10) # 100% power, 0 errors
+powerSim(C_MLU_model, test = fixed("Visit:MOT_MLU"), nsim = 10) # 5% power, 0 errors
+powerSim(C_MLU_model, test = fixed("Visit:VerbalIQ1"), nsim = 10) # 0% power, 100 errors
 
-?powerCurve
 
-pc1 <‐ powerCurve(m2, along="Child.ID")
+# Power curve for interaction between visit and diagnosis
+m2 <‐ extend(C_MLU_model, along="Child.ID", n=150)
+pc1 <‐ powerCurve(m2, test = fixed("Visit:Diagnosis"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
+# Power curve plot 1
+plot(pc1) 
 
-plot(pc1)
+# Power curve for interaction between visit and parental MLU
+pc2 <- powerCurve(m2, test = fixed("Visit:MOT_MLU"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
+# Power curve plot 2
+plot(pc2)
+
+# Power curve for interaction between visit and verbal IQ
+pc3 <- powerCurve(m2, test = fixed("Visit:VerbalIQ1"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
+# Power curve plot 3
+plot(pc3)
+
+
 ```
 
 
@@ -100,6 +107,7 @@ plot(pc1)
 
 How would you perform a more conservative power analysis?
 - Identify and justify a minimum effect size for each of your relevant effects
+      10 % of SD 
 - take the model from exercise 1 and replace the effects with the minimum effect size that you'd accept.
 - assess the power curve by Child.ID, identifying an ideal number of participants to estimate each effect
 - if your power estimates do not reach an acceptable threshold simulate additional participants and repeat the previous analysis
