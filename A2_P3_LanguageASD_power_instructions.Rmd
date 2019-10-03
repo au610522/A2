@@ -47,8 +47,6 @@ You will be using:
 pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret, MuMIn)
 pacman::p_load(rlist, simr)
 
-install.packages('simr', dependencies = T)
-
 #Loading data - using the function from part 2 
 
 #Training set
@@ -119,21 +117,22 @@ test$Child.ID <- test$Child.ID + 66
 
 train$Visit <- as.integer(train$Visit)
 
+train$CHI_MLU <- scale(train$CHI_MLU)
 
-# Model
-C_MLU_model <- lmer(data = train, CHI_MLU ~ Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0+Visit|Child.ID))
 
-summary(C_MLU_model)
+# Model - our prefered model did not converge with any optimizers so we created a simpler model 
+# C_MLU_model <- lmer(data = train, CHI_MLU ~ Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0+Visit|Child.ID)) 
+
+# model we will use 
+m10 <- lmer(data = train, CHI_MLU ~ Visit * Diagnosis + Visit * MOT_MLU + (1|Child.ID) + (0+Visit|Child.ID))
 
 # Power simulation on the fixed interaction effects
-powerSim(C_MLU_model, test = fixed("Visit:Diagnosis"), nsim = 10) # 100% power, 0 errors
-powerSim(C_MLU_model, test = fixed("Visit:MOT_MLU"), nsim = 10) # 5% power, 0 errors
-powerSim(C_MLU_model, test = fixed("Visit:VerbalIQ1"), nsim = 10) # 0% power, 100 errors
-
+powerSim(m10, test = fixed("Visit:Diagnosis"), nsim = 100) # 100% power, 0 errors
+powerSim(m10, test = fixed("Visit:MOT_MLU"), nsim = 100) # 13% power, 0 errors
 
 # Power curve for interaction between visit and diagnosis
-m2 <‐ extend(C_MLU_model, along="Child.ID", n=150)
-pc1 <‐ powerCurve(m2, test = fixed("Visit:Diagnosis"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
+m2 <- extend(m10, along="Child.ID", n=150)
+pc1 <- powerCurve(m2, test = fixed("Visit:Diagnosis"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
 # Power curve plot 1
 plot(pc1) 
 
@@ -141,12 +140,6 @@ plot(pc1)
 pc2 <- powerCurve(m2, test = fixed("Visit:MOT_MLU"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
 # Power curve plot 2
 plot(pc2)
-
-# Power curve for interaction between visit and verbal IQ
-pc3 <- powerCurve(m2, test = fixed("Visit:VerbalIQ1"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
-# Power curve plot 3
-plot(pc3)
-
 
 ```
 
@@ -162,7 +155,25 @@ How would you perform a more conservative power analysis?
 - Report the power analysis and comment on what you can (or cannot) use its estimates for.
 
 ```{r}
+sd(train$CHI_MLU) # Gives us a standard deviation for CHI_MLU
+# Taking around 10% of the SD as the effect size
+fixef(m10)["Visit:DiagnosisTD"] <- 0.1
+m10 <- extend(m10, along="Child.ID", n=150)
+# Power curve for Visit*Diagnosis
+pc4 <- powerCurve(m10, test = fixed("Visit:Diagnosis"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
 
+plot(pc4)
+
+# Power curve for Visit*MOT_MLU
+pc5 <- powerCurve(m10, test = fixed("Visit:MOT_MLU"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
+
+plot(pc5)
+
+
+# Power curve for Visit*Verbal_IQ
+pc6 <- powerCurve(m10, test = fixed("Visit:VerbalIQ1"), along="Child.ID", nsim = 100, breaks = seq(from = 10, to = 120, by = 5), seed = 1, progress = F)
+
+plot(pc6)
 ```
 
 
@@ -171,15 +182,24 @@ How would you perform a more conservative power analysis?
 Assume you have only the resources to collect 30 kids (15 with ASD and 15 TDs). Identify the power for each relevant effect and discuss whether it's worth to run the study and why
 
 ```{r}
+# Get 30 participants, 15 TD and 15 ASD
+# make vector of unique ID's for participants with ASD
 temp_ids_ASD <- unique(train$Child.ID[train$Diagnosis=="ASD"])
-temp_ids_ASD <- temp_ids_ASD[1:15]
-temp_ASD <- train[train$Child.ID %in% temp_ids_ASD,]
 temp_ids_TD <- unique(train$Child.ID[train$Diagnosis=="TD"])
+# take first 15 participants and remove rest from list
+temp_ids_ASD <- temp_ids_ASD[1:15]
 temp_ids_TD <- temp_ids_TD[1:15]
-temp_TD <- train[train$Child.ID %in% temp_ids_TD,]
-train_subset <- rbind(temp_ASD, temp_TD)
-rm(temp_ids_ASD, temp_ids_TD, temp_ASD, temp_TD)
+# make dataframe for participant id's matching either of the vectors
+train_subset <- train[train$Child.ID %in% temp_ids_ASD | train$Child.ID %in% temp_ids_TD,]
+# remove unused variables
+rm(temp_ids_ASD, temp_ids_TD)
 
 
+# Power simulation
+m10 <- lmer(data = train_subset, CHI_MLU ~ Visit * Diagnosis + Visit * MOT_MLU + Visit * verbalIQ1 + (1|Child.ID) + (0+Visit|Child.ID))
+
+powerSim(m10, test = fixed("Visit:Diagnosis"), nsim = 100) # 100% power, 0 errors
+powerSim(m10, test = fixed("Visit:MOT_MLU"), nsim = 100) # 9% power, 0 errors
+powerSim(m10, test = fixed("Visit:VerbalIQ1"), nsim = 100) # 0% power, 100 errors
 
 ```
