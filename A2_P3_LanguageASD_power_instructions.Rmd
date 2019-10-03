@@ -62,6 +62,54 @@ token_test <- read.csv('token_test.csv', header = T, sep =',')
 LU_test <- read.csv('LU_test.csv', header = T, sep = ',')
 
 # Cleaning the data
+
+CleanUpData <- function(Demo,LU,Word){
+  
+  Speech <- merge(LU, Word) %>% 
+    rename(
+      Child.ID = SUBJ, 
+      Visit=VISIT) %>%
+    mutate(
+      Visit = as.numeric(str_extract(Visit, "\\d")),
+      Child.ID = gsub("\\.","", Child.ID)
+      ) %>%
+    dplyr::select(
+      Child.ID, Visit, MOT_MLU, CHI_MLU, types_MOT, types_CHI, tokens_MOT, tokens_CHI
+    )
+  
+  Demo <- Demo %>%
+    dplyr::select(
+      Child.ID, Visit, Ethnicity, Diagnosis, Gender, Age, ADOS, MullenRaw, ExpressiveLangRaw, Socialization
+    ) %>%
+    mutate(
+      Child.ID = gsub("\\.","", Child.ID)
+    )
+    
+  Data=merge(Demo,Speech,all=T)
+  
+  Data1= Data %>% 
+     subset(Visit=="1") %>% 
+     dplyr::select(Child.ID, ADOS, ExpressiveLangRaw, MullenRaw, Socialization) %>%
+     rename(Ados1 = ADOS, 
+            verbalIQ1 = ExpressiveLangRaw, 
+            nonVerbalIQ1 = MullenRaw,
+            Socialization1 = Socialization) 
+  
+  Data=merge(Data, Data1, all=T) %>%
+    mutate(
+      Child.ID = as.numeric(as.factor(as.character(Child.ID))),
+      Visit = as.numeric(as.character(Visit)),
+      Gender = recode(Gender, 
+         "1" = "M",
+         "2" = "F"),
+      Diagnosis = recode(Diagnosis,
+         "A"  = "TD",
+         "B"  = "ASD")
+    )
+
+  return(Data)
+}
+
 train <- CleanUpData(demo_train, LU_train, token_train)
 train <- subset(train, !is.na(CHI_MLU))
 
@@ -123,5 +171,15 @@ How would you perform a more conservative power analysis?
 Assume you have only the resources to collect 30 kids (15 with ASD and 15 TDs). Identify the power for each relevant effect and discuss whether it's worth to run the study and why
 
 ```{r}
+temp_ids_ASD <- unique(train$Child.ID[train$Diagnosis=="ASD"])
+temp_ids_ASD <- temp_ids_ASD[1:15]
+temp_ASD <- train[train$Child.ID %in% temp_ids_ASD,]
+temp_ids_TD <- unique(train$Child.ID[train$Diagnosis=="TD"])
+temp_ids_TD <- temp_ids_TD[1:15]
+temp_TD <- train[train$Child.ID %in% temp_ids_TD,]
+train_subset <- rbind(temp_ASD, temp_TD)
+rm(temp_ids_ASD, temp_ids_TD, temp_ASD, temp_TD)
+
+
 
 ```
